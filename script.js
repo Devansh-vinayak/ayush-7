@@ -22,8 +22,7 @@ if (starsLayer) {
   }
 }
 
-// ===== Floating hearts =====
-function spawnHeart() {
+// ===== Floating hearts =====nfunction spawnHeart() {
   const h = document.createElement('div');
   h.className = 'float-heart';
   h.textContent = ['♥', '❤', '💕'][Math.floor(Math.random() * 3)];
@@ -57,6 +56,7 @@ const BG_PLAYING_KEY = 'ourStoryBgMusicPlaying';
 let bgAudio = null;
 let audioControl = null;
 let _firstInteractionBound = false;
+let unmuteOverlay = null;
 
 function createAudioControl() {
   if (audioControl) return;
@@ -102,12 +102,63 @@ function updateAudioControl() {
   }
 }
 
+function createUnmuteOverlay() {
+  if (unmuteOverlay) return;
+  unmuteOverlay = document.createElement('div');
+  unmuteOverlay.id = 'unmuteOverlay';
+  unmuteOverlay.style.position = 'fixed';
+  unmuteOverlay.style.left = '0';
+  unmuteOverlay.style.top = '0';
+  unmuteOverlay.style.width = '100%';
+  unmuteOverlay.style.height = '100%';
+  unmuteOverlay.style.display = 'flex';
+  unmuteOverlay.style.alignItems = 'center';
+  unmuteOverlay.style.justifyContent = 'center';
+  unmuteOverlay.style.zIndex = '9998';
+  unmuteOverlay.style.background = 'rgba(0,0,0,0.35)';
+
+  const btn = document.createElement('button');
+  btn.textContent = 'Tap to enable music';
+  btn.style.padding = '14px 22px';
+  btn.style.fontSize = '18px';
+  btn.style.borderRadius = '999px';
+  btn.style.border = 'none';
+  btn.style.cursor = 'pointer';
+  btn.style.background = 'linear-gradient(90deg,#ff7eb6,#ff4d94)';
+  btn.style.color = '#fff';
+  btn.style.boxShadow = '0 6px 18px rgba(0,0,0,0.35)';
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!bgAudio) return;
+    bgAudio.muted = false;
+    bgAudio.volume = 0.6;
+    bgAudio.play().catch(()=>{});
+    updateAudioControl();
+    hideUnmuteOverlay();
+    try { localStorage.setItem(BG_PLAYING_KEY, 'true'); } catch(e){}
+  });
+
+  unmuteOverlay.appendChild(btn);
+  document.body.appendChild(unmuteOverlay);
+}
+
+function hideUnmuteOverlay() {
+  if (!unmuteOverlay) return;
+  unmuteOverlay.remove();
+  unmuteOverlay = null;
+}
+
 function bindFirstInteractionPlay() {
   if (_firstInteractionBound) return;
   const startOnFirstInteraction = () => {
     if (bgAudio && bgAudio.paused) {
-      bgAudio.play().catch(() => {});
-      updateAudioControl();
+      // unmute if overlay not shown; otherwise overlay handles it
+      if (!unmuteOverlay) {
+        try { bgAudio.muted = false; bgAudio.volume = 0.6; } catch(e){}
+        bgAudio.play().catch(() => {});
+        updateAudioControl();
+      }
     }
   };
   window.addEventListener('click', startOnFirstInteraction, { once: true });
@@ -127,6 +178,9 @@ function setupPersistentAudio() {
     bgAudio.preload = 'auto';
     bgAudio.crossOrigin = 'anonymous';
     bgAudio.loop = false;
+    // allow muted autoplay to start playback immediately (browser-permitted)
+    bgAudio.autoplay = true;
+    bgAudio.muted = true;
     document.body.prepend(bgAudio);
   } else {
     // remove duplicate audio elements if there are multiple
@@ -141,11 +195,18 @@ function setupPersistentAudio() {
     bgAudio.preload = 'auto';
   }
 
-  // ensure not muted
-  try { bgAudio.muted = false; } catch (e) {}
+  // try to start muted playback immediately (this is allowed by browsers)
+  try {
+    bgAudio.play().catch(()=>{});
+  } catch(e){}
 
   // add control UI
   createAudioControl();
+
+  // if audio is muted (autoplayed muted), show an overlay that asks the user to tap to enable sound
+  if (bgAudio.muted) {
+    createUnmuteOverlay();
+  }
 
   // restore time and playing state
   const savedTime = parseFloat(localStorage.getItem(BG_TIME_KEY));
@@ -172,7 +233,7 @@ function setupPersistentAudio() {
   const saveState = () => {
     try {
       localStorage.setItem(BG_TIME_KEY, bgAudio.currentTime.toString());
-      localStorage.setItem(BG_PLAYING_KEY, (!bgAudio.paused).toString());
+      localStorage.setItem(BG_PLAYING_KEY, (!bgAudio.paused && !bgAudio.muted).toString());
     } catch (e) { }
   };
 
