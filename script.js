@@ -22,7 +22,8 @@ if (starsLayer) {
   }
 }
 
-// ===== Floating hearts =====nfunction spawnHeart() {
+// ===== Floating hearts =====
+function spawnHeart() {
   const h = document.createElement('div');
   h.className = 'float-heart';
   h.textContent = ['♥', '❤', '💕'][Math.floor(Math.random() * 3)];
@@ -50,7 +51,8 @@ function spawnButterfly() {
 }
 setInterval(spawnButterfly, 2500);
 
-// ===== Background music with cross-page continuity =====nconst BG_TIME_KEY = 'ourStoryBgMusicTime';
+// ===== Background music with cross-page continuity =====
+const BG_TIME_KEY = 'ourStoryBgMusicTime';
 const BG_PLAYING_KEY = 'ourStoryBgMusicPlaying';
 let bgAudio = null;
 let audioControl = null;
@@ -120,8 +122,8 @@ function setupPersistentAudio() {
     // create one and prepend to body
     bgAudio = document.createElement('audio');
     bgAudio.id = 'bgMusic';
-    // default src - use repo filename directly
-    bgAudio.src = 'WhatsApp Audio 2026-06-28 at 04.22.30.mpeg';
+    // default src - use encoded URI to handle spaces
+    bgAudio.src = encodeURI('WhatsApp Audio 2026-06-28 at 04.22.30.mpeg');
     bgAudio.preload = 'auto';
     bgAudio.crossOrigin = 'anonymous';
     bgAudio.loop = false;
@@ -134,6 +136,8 @@ function setupPersistentAudio() {
         if (a.id !== 'bgMusic') a.remove();
       });
     }
+    // ensure src is encoded
+    try { bgAudio.src = encodeURI(bgAudio.src.split('/').pop()); } catch (e) {}
     bgAudio.preload = 'auto';
   }
 
