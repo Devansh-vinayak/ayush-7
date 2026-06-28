@@ -22,8 +22,7 @@ if (starsLayer) {
   }
 }
 
-// ===== Floating hearts =====
-function spawnHeart() {
+// ===== Floating hearts =====nfunction spawnHeart() {
   const h = document.createElement('div');
   h.className = 'float-heart';
   h.textContent = ['♥', '❤', '💕'][Math.floor(Math.random() * 3)];
@@ -51,10 +50,68 @@ function spawnButterfly() {
 }
 setInterval(spawnButterfly, 2500);
 
-// ===== Background music with cross-page continuity =====
-const BG_TIME_KEY = 'ourStoryBgMusicTime';
+// ===== Background music with cross-page continuity =====nconst BG_TIME_KEY = 'ourStoryBgMusicTime';
 const BG_PLAYING_KEY = 'ourStoryBgMusicPlaying';
 let bgAudio = null;
+let audioControl = null;
+let _firstInteractionBound = false;
+
+function createAudioControl() {
+  if (audioControl) return;
+  audioControl = document.createElement('div');
+  audioControl.id = 'audioControl';
+  audioControl.style.position = 'fixed';
+  audioControl.style.right = '18px';
+  audioControl.style.bottom = '18px';
+  audioControl.style.zIndex = '9999';
+  audioControl.style.background = 'rgba(0,0,0,0.45)';
+  audioControl.style.color = '#fff';
+  audioControl.style.padding = '8px 10px';
+  audioControl.style.borderRadius = '20px';
+  audioControl.style.fontFamily = 'Quicksand, sans-serif';
+  audioControl.style.display = 'flex';
+  audioControl.style.alignItems = 'center';
+  audioControl.style.gap = '8px';
+  audioControl.style.cursor = 'pointer';
+  audioControl.innerHTML = '<span id="audioIcon">🔈</span><span style="font-size:13px">Play music</span>';
+  audioControl.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!bgAudio) return;
+    if (bgAudio.paused) {
+      bgAudio.play().catch(() => {});
+    } else {
+      bgAudio.pause();
+    }
+    updateAudioControl();
+  });
+  document.body.appendChild(audioControl);
+}
+
+function updateAudioControl() {
+  if (!audioControl || !bgAudio) return;
+  const icon = audioControl.querySelector('#audioIcon');
+  const label = audioControl.querySelector('span:nth-child(2)');
+  if (bgAudio.paused) {
+    icon.textContent = '🔇';
+    label.textContent = 'Play music';
+  } else {
+    icon.textContent = '🔊';
+    label.textContent = 'Pause music';
+  }
+}
+
+function bindFirstInteractionPlay() {
+  if (_firstInteractionBound) return;
+  const startOnFirstInteraction = () => {
+    if (bgAudio && bgAudio.paused) {
+      bgAudio.play().catch(() => {});
+      updateAudioControl();
+    }
+  };
+  window.addEventListener('click', startOnFirstInteraction, { once: true });
+  window.addEventListener('keydown', startOnFirstInteraction, { once: true });
+  _firstInteractionBound = true;
+}
 
 function setupPersistentAudio() {
   // If an audio element with id bgMusic already exists, keep it. Otherwise create one at top of body.
@@ -63,20 +120,28 @@ function setupPersistentAudio() {
     // create one and prepend to body
     bgAudio = document.createElement('audio');
     bgAudio.id = 'bgMusic';
-    // default src - keep the repo filename (URL-encoded spaces) used earlier
-    bgAudio.src = 'WhatsApp%20Audio%202026-06-28%20at%2004.22.30.mpeg';
+    // default src - use repo filename directly
+    bgAudio.src = 'WhatsApp Audio 2026-06-28 at 04.22.30.mpeg';
     bgAudio.preload = 'auto';
+    bgAudio.crossOrigin = 'anonymous';
+    bgAudio.loop = false;
     document.body.prepend(bgAudio);
   } else {
     // remove duplicate audio elements if there are multiple
     const audios = document.querySelectorAll('audio');
     if (audios.length > 1) {
-      audios.forEach((a, idx) => {
+      audios.forEach((a) => {
         if (a.id !== 'bgMusic') a.remove();
       });
     }
     bgAudio.preload = 'auto';
   }
+
+  // ensure not muted
+  try { bgAudio.muted = false; } catch (e) {}
+
+  // add control UI
+  createAudioControl();
 
   // restore time and playing state
   const savedTime = parseFloat(localStorage.getItem(BG_TIME_KEY));
@@ -90,18 +155,13 @@ function setupPersistentAudio() {
     const playPromise = bgAudio.play();
     if (playPromise !== undefined) {
       playPromise.catch(() => {
-        const onFirstInteraction = () => {
-          bgAudio.play().catch(() => {});
-          window.removeEventListener('click', onFirstInteraction);
-          window.removeEventListener('keydown', onFirstInteraction);
-        };
-        window.addEventListener('click', onFirstInteraction);
-        window.addEventListener('keydown', onFirstInteraction);
-      });
+        // autoplay blocked - bind first user interaction to play
+        bindFirstInteractionPlay();
+      }).then(() => updateAudioControl()).catch(()=>{});
     }
   };
 
-  bgAudio.volume = 0.45;
+  bgAudio.volume = 0.6;
   if (savedPlaying) tryPlay();
 
   // save time and playing state periodically
@@ -112,8 +172,8 @@ function setupPersistentAudio() {
     } catch (e) { }
   };
 
-  bgAudio.addEventListener('play', saveState);
-  bgAudio.addEventListener('pause', saveState);
+  bgAudio.addEventListener('play', () => { saveState(); updateAudioControl(); });
+  bgAudio.addEventListener('pause', () => { saveState(); updateAudioControl(); });
   bgAudio.addEventListener('timeupdate', () => {
     // throttle saves
     if (!bgAudio._lastSaved || Date.now() - bgAudio._lastSaved > 700) {
@@ -125,6 +185,9 @@ function setupPersistentAudio() {
   window.addEventListener('pagehide', () => {
     saveState();
   });
+
+  // ensure first-interaction binder is ready so single click to advance also allows play
+  bindFirstInteractionPlay();
 }
 
 // Initialize persistent audio right away
@@ -159,9 +222,6 @@ async function ajaxNavigate(url, push = true) {
     // Update document title
     if (doc.title) document.title = doc.title;
 
-    // Remove any audio element that came with fetched page (we keep persistent bgAudio)
-    // (No action needed since we only replaced #stage)
-
     // Re-run any initialization that depends on new DOM
     initFinalSurprise();
 
@@ -179,7 +239,7 @@ document.addEventListener('click', (event) => {
   const body = document.body;
   const nextPage = body.dataset.nextPage;
 
-  // If user clicked an actual link, follow default (let anchors work)
+  // If user clicked an actual link, allow default (anchors should still work)
   if (clickedLink) return;
 
   if (!nextPage) return;
@@ -188,6 +248,12 @@ document.addEventListener('click', (event) => {
   if (event.target.closest('.navRow') || event.target.closest('button') || event.target.closest('input') || event.target.closest('a')) return;
 
   event.preventDefault();
+
+  // If audio is paused, attempt to play (useful because many users click to advance)
+  if (bgAudio && bgAudio.paused) {
+    bgAudio.play().catch(() => {});
+  }
+
   ajaxNavigate(nextPage);
 });
 
@@ -205,7 +271,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function initBackgroundMusic() {
   // kept for compatibility - audio is already set up in setupPersistentAudio
-  // Ensure bgAudio uses saved time when page loaded via full reload
   if (!bgAudio) setupPersistentAudio();
   const savedTime = parseFloat(localStorage.getItem(BG_TIME_KEY));
   if (!Number.isNaN(savedTime) && savedTime > 0) {
