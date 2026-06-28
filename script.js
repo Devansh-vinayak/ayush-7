@@ -34,7 +34,8 @@ function spawnHeart(){
 setInterval(spawnHeart, 900);
 for(let i=0;i<4;i++) setTimeout(spawnHeart, i*300);
 
-// ===== Butterflies =====nfunction spawnButterfly(){
+// ===== Butterflies =====
+function spawnButterfly(){
   const b = document.createElement('div');
   b.className='butterfly';
   b.textContent='🦋';
@@ -104,7 +105,8 @@ function initBackgroundMusic(){
   });
 }
 
-// ===== Final surprise box =====nfunction initFinalSurprise(){
+// ===== Final surprise box =====
+function initFinalSurprise(){
   const giftBox = document.getElementById('giftBox');
   const reveal = document.getElementById('surpriseReveal');
   if (!giftBox || !reveal) return;
@@ -129,7 +131,8 @@ function initBackgroundMusic(){
   setTimeout(openGift, 1400);
 }
 
-// ===== Fireworks (used on the final page) =====nfunction launchFireworks(){
+// ===== Fireworks (used on the final page) =====
+function launchFireworks(){
   const colors = ['#ff7eb6','#ffd76e','#ffffff','#ff4d94'];
   for(let burst=0; burst<5; burst++){
     setTimeout(()=>{
